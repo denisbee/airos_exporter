@@ -1,0 +1,14 @@
+# vim: set ts=4 sw=4 sts=4 et ai:
+version: "2.3"
+services:
+    airos_exporter:
+        build: ./
+        restart: always
+        cpus: "2"
+        mem_limit: 128m
+        ports:
+            - 8890:8890
+        environment:
+            WORKERS: "16"
+            PORT: "8890"
+            UBNT_PASSWORD: "ubntpassword"
