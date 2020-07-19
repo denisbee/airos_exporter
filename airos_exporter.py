@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-import os, signal, sys
+import os, signal, sys, time
 from typing import Callable, Dict
 from datetime import datetime, timezone
 from urllib.parse import parse_qs
 
+import paramiko
 from airos_tools import AirOS
 from prometheus_client import Counter, Gauge, generate_latest, CollectorRegistry
 import bjoern
@@ -20,6 +21,19 @@ def common_log(environ: Dict, status, size):
         status, 
         size
     )
+
+def airos_connect(hostname: str, password: str) ->  AirOS:
+    for _ in range(9):
+        try:
+            airos = AirOS(hostname=hostname, password=password)
+        except paramiko.ssh_exception.AuthenticationException as e:
+            raise e
+        except paramiko.ssh_exception.SSHException as e:
+            print(type(e).__name__)
+            time.sleep(2)
+        else:
+            return airos
+    return AirOS(hostname=hostname, password=password)
 
 def application(environ: Dict, start_response: Callable):
     path = environ['PATH_INFO']
@@ -38,7 +52,7 @@ def application(environ: Dict, start_response: Callable):
     else:
         r = CollectorRegistry()
         try:
-            with AirOS(hostname=target, password=UBNT_PASSWORD) as airos:
+            with airos_connect(hostname=target, password=UBNT_PASSWORD) as airos:
 
                 labels = {  
                     "device_id": airos.mcastatus.get('deviceId'),
