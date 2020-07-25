@@ -152,10 +152,10 @@ def application(environ: Dict, start_response: Callable):
                         remote.get("rssi"))
                     Gauge("airos_remote_tx_power_dbm", 'Remote TX Power', labels2.keys(), registry=r2).labels(**labels2).set(
                         remote.get("txpower"))
-                    Gauge("airos_remote_noise_floor_dbm", 'Remote TX Power', labels2.keys(), registry=r2).labels(**labels2).set(
+                    Gauge("airos_remote_noise_floor_dbm", 'Remote Noise Floor', labels2.keys(), registry=r2).labels(**labels2).set(
                         remote.get("noisefloor"))
                     if remote.get('airmax', {}).get('quality'):
-                        Gauge("airos_airmax_quality_percents", 'Remote AMQ', labels2.keys(), registry=r2).labels(**labels2).set(
+                        Gauge("airos_remote_airmax_quality_percents", 'Remote AMQ', labels2.keys(), registry=r2).labels(**labels2).set(
                             remote['airmax']['quality'])
 
                     rr.append(r2)
