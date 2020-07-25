@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import os, signal, sys, time
-from typing import Callable, Dict
+from typing import Callable, Dict, List
 from datetime import datetime, timezone
 from urllib.parse import parse_qs
 
@@ -51,6 +51,7 @@ def application(environ: Dict, start_response: Callable):
         common_log(environ, '500', size)
     else:
         r = CollectorRegistry()
+        rr: List[CollectorRegistry] = [r]
         try:
             with airos_connect(hostname=target, password=UBNT_PASSWORD) as airos:
 
@@ -60,6 +61,14 @@ def application(environ: Dict, start_response: Callable):
                     "ap_mac": airos.mcastatus.get('apMac'),
                     "wireless_mode": airos.mcastatus.get('wlanOpmode', '')
                 }
+
+                Gauge("airos_airmax_quality_percents", 'The airMax Quality (AMQ) is based on the number of retries and '
+                    'the quality of the physical link', labels.keys(), registry=r).labels(**labels).set(
+                    airos.mcastatus.get("wlanPollingQuality"))
+
+                Gauge("airos_airmax_capacity_percents", 'The airMax Capacity (AMC) is based on the ratio of current rate and maximum '
+                    'rate', labels.keys(), registry=r).labels(**labels).set(
+                    airos.mcastatus.get("wlanPollingCapacity"))
 
                 Gauge("airos_wlan_tx_rate_mbps", 'Radio TX rate', labels.keys(), registry=r).labels(**labels).set(
                     airos.mcastatus.get("wlanTxRate"))
@@ -127,13 +136,37 @@ def application(environ: Dict, start_response: Callable):
                 Counter("airos_wlan_tx_bytes_total", "WLAN TX bytes", labels.keys(), registry=r).labels(**labels).inc(
                     int(airos.mcastatus.get("wlanTxBytes")))
 
+                for remote in airos.wstalist:
+                    r2 = CollectorRegistry()
+                    remote_labels: Dict[str, str] = {}
+                    remote_labels['remote_mac'] = remote['mac']
+                    remote_labels['remote_lastip'] = remote['lastip']
+                    remote_labels['remote_hostname'] = str(remote.get('remote', {}).get('hostname', remote.get('name', '')))
+                    labels2 = labels.copy()
+                    labels2.update(remote_labels)
+                    Gauge("airos_remote_signal", 'Remote Signal', labels2.keys(), registry=r2).labels(**labels2).set(
+                        remote.get("signal"))
+                    Gauge("airos_remote_ccq", 'Remote CCQ', labels2.keys(), registry=r2).labels(**labels2).set(
+                        remote.get("ccq"))
+                    Gauge("airos_remote_rssi_dbm", 'Remote RSSI', labels2.keys(), registry=r2).labels(**labels2).set(
+                        remote.get("rssi"))
+                    Gauge("airos_remote_tx_power_dbm", 'Remote TX Power', labels2.keys(), registry=r2).labels(**labels2).set(
+                        remote.get("txpower"))
+                    Gauge("airos_remote_noise_floor_dbm", 'Remote TX Power', labels2.keys(), registry=r2).labels(**labels2).set(
+                        remote.get("noisefloor"))
+                    if remote.get('airmax', {}).get('quality'):
+                        Gauge("airos_airmax_quality_percents", 'Remote AMQ', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote['airmax']['quality'])
+
+                    rr.append(r2)
+
                 Gauge('airos_error', '', labels.keys(), registry=r).labels(**labels).set(0)
 
         except Exception as e:
             Gauge('airos_error', '', ['error'], registry=r).labels(error=str(e)).set(1)
             
         status = "200 OK"
-        body = generate_latest(registry=r)
+        body = b''.join(generate_latest(registry=reg) for reg in rr)
         size = str(len(body))
         common_log(environ, '200', size)
 
