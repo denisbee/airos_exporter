@@ -154,6 +154,8 @@ def application(environ: Dict, start_response: Callable):
                         remote.get("txpower"))
                     Gauge("airos_remote_noise_floor_dbm", 'Remote Noise Floor', labels2.keys(), registry=r2).labels(**labels2).set(
                         remote.get("noisefloor"))
+                    Gauge("airos_remote_tx_latency_seconds", 'Remote TX Latency', labels2.keys(), registry=r2).labels(**labels2).set(
+                        float(remote.get("tx_latency", 0)) / 1000)
                     if remote.get('airmax', {}).get('quality'):
                         Gauge("airos_remote_airmax_quality_percents", 'Remote AMQ', labels2.keys(), registry=r2).labels(**labels2).set(
                             remote['airmax']['quality'])
