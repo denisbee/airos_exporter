@@ -42,7 +42,7 @@ def application(environ: Dict, start_response: Callable):
     if path != '/metrics' and path != '/metrics/':
         status = "404 Not Found"
         body = b''
-        size = str(len(body))
+        size = 0
         common_log(environ, '404', size)
     elif not target:
         status = "500 Internal Server Error"
@@ -150,8 +150,9 @@ def application(environ: Dict, start_response: Callable):
                         remote.get("ccq"))
                     Gauge("airos_remote_rssi_dbm", 'Remote RSSI', labels2.keys(), registry=r2).labels(**labels2).set(
                         remote.get("rssi"))
-                    Gauge("airos_remote_tx_power_dbm", 'Remote TX Power', labels2.keys(), registry=r2).labels(**labels2).set(
-                        remote.get("txpower"))
+                    if remote.get('remote', {}).get('tx_power'):
+                        Gauge("airos_remote_tx_power_dbm", 'Remote TX Power', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote['remote']['tx_power'])
                     Gauge("airos_remote_noise_floor_dbm", 'Remote Noise Floor', labels2.keys(), registry=r2).labels(**labels2).set(
                         remote.get("noisefloor"))
                     Gauge("airos_remote_tx_latency_seconds", 'Remote TX Latency', labels2.keys(), registry=r2).labels(**labels2).set(
