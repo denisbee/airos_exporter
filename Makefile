@@ -8,6 +8,9 @@ endif
 up:
 	docker-compose up -d --remove-orphans
 
+build:
+	docker-compose build --pull
+
 logs:
 	-docker-compose logs -f --tail=1000 -t
 

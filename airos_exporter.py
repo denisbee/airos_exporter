@@ -138,13 +138,19 @@ def application(environ: Dict, start_response: Callable):
 
                 for remote in airos.wstalist:
                     r2 = CollectorRegistry()
+
                     remote_labels: Dict[str, str] = {}
                     remote_labels['remote_mac'] = remote['mac']
                     remote_labels['remote_lastip'] = remote['lastip']
                     remote_labels['remote_hostname'] = str(remote.get('remote', {}).get('hostname', remote.get('name', '')))
+                    if remote.get('remote', {}).get('platform'):
+                        remote_labels['remote_platform'] = remote.get('remote', {}).get('platform')
+                    if remote.get('remote', {}).get('version'):
+                        remote_labels['remote_version'] = remote.get('remote', {}).get('version')
+
                     labels2 = labels.copy()
                     labels2.update(remote_labels)
-                    Gauge("airos_remote_signal", 'Remote Signal', labels2.keys(), registry=r2).labels(**labels2).set(
+                    Gauge("airos_remote_signal", 'Signal received from remote device', labels2.keys(), registry=r2).labels(**labels2).set(
                         remote.get("signal"))
                     Gauge("airos_remote_ccq", 'Remote CCQ', labels2.keys(), registry=r2).labels(**labels2).set(
                         remote.get("ccq"))
@@ -153,6 +159,9 @@ def application(environ: Dict, start_response: Callable):
                     if remote.get('remote', {}).get('tx_power'):
                         Gauge("airos_remote_tx_power_dbm", 'Remote TX Power', labels2.keys(), registry=r2).labels(**labels2).set(
                             remote['remote']['tx_power'])
+                    if remote.get('remote', {}).get('signal'):
+                        Gauge("airos_remote_tx_signal_dbm", 'Signal received by remote device', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote['remote']['signal'])
                     Gauge("airos_remote_noise_floor_dbm", 'Remote Noise Floor', labels2.keys(), registry=r2).labels(**labels2).set(
                         remote.get("noisefloor"))
                     Gauge("airos_remote_tx_latency_seconds", 'Remote TX Latency', labels2.keys(), registry=r2).labels(**labels2).set(
@@ -160,6 +169,12 @@ def application(environ: Dict, start_response: Callable):
                     if remote.get('airmax', {}).get('quality'):
                         Gauge("airos_remote_airmax_quality_percents", 'Remote AMQ', labels2.keys(), registry=r2).labels(**labels2).set(
                             remote['airmax']['quality'])
+                    if remote.get('remote', {}).get('tx_bytes'):
+                        Gauge("airos_remote_tx_bytes_total", 'Bytes sent by remotye device', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote['remote']['tx_bytes'])
+                    if remote.get('remote', {}).get('rx_bytes'):
+                        Gauge("airos_remote_rx_bytes_total", 'Bytes received by remote device', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote['remote']['rx_bytes'])
 
                     rr.append(r2)
 
