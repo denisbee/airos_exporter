@@ -154,6 +154,15 @@ def application(environ: Dict, start_response: Callable):
                         remote.get("signal"))
                     Gauge("airos_remote_ccq", 'Remote CCQ', labels2.keys(), registry=r2).labels(**labels2).set(
                         remote.get("ccq"))
+                    if remote.get('airmax', {}).get('quality'):
+                        Gauge("airos_remote_amq", 'Remote airMax Quality', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote.get('airmax', {}).get('quality'))
+                    if remote.get('airmax', {}).get('capacity'):
+                        Gauge("airos_remote_amc", 'Remote airMax Capacity', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote.get('airmax', {}).get('capacity'))
+                    if remote.get('airmax', {}).get('capacity'):
+                        Gauge("airos_remote_airmax_priority", 'Remote airMax Priority', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote.get('airmax', {}).get('priority'))
                     Gauge("airos_remote_rssi_dbm", 'Remote RSSI', labels2.keys(), registry=r2).labels(**labels2).set(
                         remote.get("rssi"))
                     if remote.get('remote', {}).get('tx_power'):
