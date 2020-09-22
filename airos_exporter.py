@@ -171,8 +171,9 @@ def application(environ: Dict, start_response: Callable):
                     if remote.get('remote', {}).get('signal'):
                         Gauge("airos_remote_tx_signal_dbm", 'Signal received by remote device', labels2.keys(), registry=r2).labels(**labels2).set(
                             remote['remote']['signal'])
-                    Gauge("airos_remote_noise_floor_dbm", 'Remote Noise Floor', labels2.keys(), registry=r2).labels(**labels2).set(
-                        remote.get("noisefloor"))
+                    if remote.get('remote', {}).get('noisefloor'):
+                        Gauge("airos_remote_noise_floor_dbm", 'Remote Noise Floor', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote.get('remote', {}).get('noisefloor'))
                     Gauge("airos_remote_tx_latency_seconds", 'Remote TX Latency', labels2.keys(), registry=r2).labels(**labels2).set(
                         float(remote.get("tx_latency", 0)) / 1000)
                     if remote.get('airmax', {}).get('quality'):
