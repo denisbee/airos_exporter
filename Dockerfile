@@ -1,9 +1,9 @@
-FROM python:3.8-alpine3.12
+FROM python:3.9-alpine
 ENV APK_DEP="libressl libev"
-ENV APK_BUILD_DEP="gcc git libev-dev musl-dev libffi-dev libressl-dev make"
+ENV APK_BUILD_DEP="gcc git libev-dev musl-dev libffi-dev libressl-dev make rust cargo"
 ADD requirements.txt /srv/service/
 WORKDIR /srv/service
-RUN apk add --no-cache ${APK_BUILD_DEP} ${APK_DEP} && \
+RUN set -x && apk add --no-cache ${APK_BUILD_DEP} ${APK_DEP} && \
     pip install -r requirements.txt && \
     apk del --no-cache ${APK_BUILD_DEP} && apk add --no-cache ${APK_DEP}
 USER 1000
