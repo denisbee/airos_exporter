@@ -2,3 +2,5 @@
 **/__pycache__
 tmp
 .vscode
+docker-compose.override.yaml
+docker-compose.override.yml

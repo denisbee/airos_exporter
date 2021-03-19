@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-import os, signal, sys
-from typing import Callable, Dict
+import os, signal, sys, time
+from typing import Callable, Dict, List
 from datetime import datetime, timezone
 from urllib.parse import parse_qs
 
+import paramiko
 from airos_tools import AirOS
 from prometheus_client import Counter, Gauge, generate_latest, CollectorRegistry
 import bjoern
@@ -21,6 +22,19 @@ def common_log(environ: Dict, status, size):
         size
     )
 
+def airos_connect(hostname: str, password: str) ->  AirOS:
+    for _ in range(9):
+        try:
+            airos = AirOS(hostname=hostname, password=password)
+        except paramiko.ssh_exception.AuthenticationException as e:
+            raise e
+        except paramiko.ssh_exception.SSHException as e:
+            print(type(e).__name__)
+            time.sleep(2)
+        else:
+            return airos
+    return AirOS(hostname=hostname, password=password)
+
 def application(environ: Dict, start_response: Callable):
     path = environ['PATH_INFO']
     q = parse_qs(environ.get('QUERY_STRING'))
@@ -28,7 +42,7 @@ def application(environ: Dict, start_response: Callable):
     if path != '/metrics' and path != '/metrics/':
         status = "404 Not Found"
         body = b''
-        size = str(len(body))
+        size = 0
         common_log(environ, '404', size)
     elif not target:
         status = "500 Internal Server Error"
@@ -37,8 +51,9 @@ def application(environ: Dict, start_response: Callable):
         common_log(environ, '500', size)
     else:
         r = CollectorRegistry()
+        rr: List[CollectorRegistry] = [r]
         try:
-            with AirOS(hostname=target, password=UBNT_PASSWORD) as airos:
+            with airos_connect(hostname=target, password=UBNT_PASSWORD) as airos:
 
                 labels = {  
                     "device_id": airos.mcastatus.get('deviceId'),
@@ -46,6 +61,14 @@ def application(environ: Dict, start_response: Callable):
                     "ap_mac": airos.mcastatus.get('apMac'),
                     "wireless_mode": airos.mcastatus.get('wlanOpmode', '')
                 }
+
+                Gauge("airos_airmax_quality_percents", 'The airMax Quality (AMQ) is based on the number of retries and '
+                    'the quality of the physical link', labels.keys(), registry=r).labels(**labels).set(
+                    airos.mcastatus.get("wlanPollingQuality"))
+
+                Gauge("airos_airmax_capacity_percents", 'The airMax Capacity (AMC) is based on the ratio of current rate and maximum '
+                    'rate', labels.keys(), registry=r).labels(**labels).set(
+                    airos.mcastatus.get("wlanPollingCapacity"))
 
                 Gauge("airos_wlan_tx_rate_mbps", 'Radio TX rate', labels.keys(), registry=r).labels(**labels).set(
                     airos.mcastatus.get("wlanTxRate"))
@@ -113,13 +136,68 @@ def application(environ: Dict, start_response: Callable):
                 Counter("airos_wlan_tx_bytes_total", "WLAN TX bytes", labels.keys(), registry=r).labels(**labels).inc(
                     int(airos.mcastatus.get("wlanTxBytes")))
 
+                for remote in airos.wstalist:
+                    r2 = CollectorRegistry()
+
+                    remote_labels: Dict[str, str] = {}
+                    remote_labels['remote_mac'] = remote['mac']
+                    remote_labels['remote_lastip'] = remote['lastip']
+                    remote_labels['remote_hostname'] = str(remote.get('remote', {}).get('hostname', remote.get('name', '')))
+                    if remote.get('remote', {}).get('platform'):
+                        remote_labels['remote_platform'] = remote.get('remote', {}).get('platform')
+                    if remote.get('remote', {}).get('version'):
+                        remote_labels['remote_version'] = remote.get('remote', {}).get('version')
+
+                    labels2 = labels.copy()
+                    labels2.update(remote_labels)
+                    Gauge("airos_remote_signal", 'Signal received from remote device', labels2.keys(), registry=r2).labels(**labels2).set(
+                        remote.get("signal"))
+                    Gauge("airos_remote_ccq", 'Remote CCQ', labels2.keys(), registry=r2).labels(**labels2).set(
+                        remote.get("ccq"))
+                    if remote.get('airmax', {}).get('quality'):
+                        Gauge("airos_remote_amq", 'Remote airMax Quality', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote.get('airmax', {}).get('quality'))
+                    if remote.get('airmax', {}).get('capacity'):
+                        Gauge("airos_remote_amc", 'Remote airMax Capacity', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote.get('airmax', {}).get('capacity'))
+                    if remote.get('airmax', {}).get('capacity'):
+                        Gauge("airos_remote_airmax_priority", 'Remote airMax Priority', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote.get('airmax', {}).get('priority'))
+                    Gauge("airos_remote_rssi_dbm", 'Remote RSSI', labels2.keys(), registry=r2).labels(**labels2).set(
+                        remote.get("rssi"))
+                    if remote.get('remote', {}).get('tx_power'):
+                        Gauge("airos_remote_tx_power_dbm", 'Remote TX Power', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote['remote']['tx_power'])
+                    if remote.get('remote', {}).get('signal'):
+                        Gauge("airos_remote_tx_signal_dbm", 'Signal received by remote device', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote['remote']['signal'])
+                    if remote.get('remote', {}).get('noisefloor'):
+                        Gauge("airos_remote_noise_floor_dbm", 'Remote Noise Floor', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote.get('remote', {}).get('noisefloor'))
+                    if remote.get('remote', {}).get('distance'):
+                        Gauge("airos_remote_distance_meters", 'Remote Distance', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote.get('remote', {}).get('distance'))
+                    Gauge("airos_remote_tx_latency_seconds", 'Remote TX Latency', labels2.keys(), registry=r2).labels(**labels2).set(
+                        float(remote.get("tx_latency", 0)) / 1000)
+                    if remote.get('airmax', {}).get('quality'):
+                        Gauge("airos_remote_airmax_quality_percents", 'Remote AMQ', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote['airmax']['quality'])
+                    if remote.get('remote', {}).get('tx_bytes'):
+                        Gauge("airos_remote_tx_bytes_total", 'Bytes sent by remotye device', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote['remote']['tx_bytes'])
+                    if remote.get('remote', {}).get('rx_bytes'):
+                        Gauge("airos_remote_rx_bytes_total", 'Bytes received by remote device', labels2.keys(), registry=r2).labels(**labels2).set(
+                            remote['remote']['rx_bytes'])
+
+                    rr.append(r2)
+
                 Gauge('airos_error', '', labels.keys(), registry=r).labels(**labels).set(0)
 
         except Exception as e:
             Gauge('airos_error', '', ['error'], registry=r).labels(error=str(e)).set(1)
             
         status = "200 OK"
-        body = generate_latest(registry=r)
+        body = b''.join(generate_latest(registry=reg) for reg in rr)
         size = str(len(body))
         common_log(environ, '200', size)
 
